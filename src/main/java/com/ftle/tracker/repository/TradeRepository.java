@@ -4,6 +4,7 @@ import com.ftle.tracker.entity.Trade;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Set;
 
 public interface TradeRepository extends JpaRepository<Trade, Long> {
@@ -24,4 +25,20 @@ public interface TradeRepository extends JpaRepository<Trade, Long> {
     // Sum of (entryPrice * quantity) for all Open trades
     @Query("SELECT SUM(t.entryPrice * t.quantity) FROM Trade t WHERE t.status = 'Open'")
     Double calculateOpenPositionsEntryValue();
+
+    @Query("""
+               SELECT t.symbol,
+                      SUM((t.exitPrice - t.entryPrice) * t.quantity)
+               FROM Trade t
+               WHERE t.status = 'Closed'
+               GROUP BY t.symbol
+            """)
+    List<Object[]> calculateStockWisePL();
+
+    @Query("""
+               SELECT SUM(t.entryPrice * t.quantity)
+               FROM Trade t
+               WHERE t.status = 'Closed'
+            """)
+    Double calculateTotalClosedInvestment();
 }

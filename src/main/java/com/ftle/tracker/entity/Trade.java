@@ -30,6 +30,7 @@ public class Trade {
     private Integer quantity;
 
     private String status;
+    private String financialYear;
 
     private LocalDate tradeDate;
 

@@ -1,9 +1,12 @@
 package com.ftle.tracker.dto;
 
+import java.util.Map;
+
 public record TradeStatsDTO(
         Double realizedPnL,
-        Double winRate,
+        Double roi,
         Long totalClosed,
         Long totalOpen,
-        Double openPositionsEntryValue // Used by frontend to calculate Live Unrealized P/L
+        Double openPositionsEntryValue,
+        Map<String,Double> stockWiseProfit
 ) {}

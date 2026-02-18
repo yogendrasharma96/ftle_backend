@@ -11,6 +11,7 @@ public class TradeRequest {
     private Double exitPrice;
     private Integer quantity;
     private String status;
+    private String financialYear;
     private LocalDate tradeDate;
     private String notes;
 }

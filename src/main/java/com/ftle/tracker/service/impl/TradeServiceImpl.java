@@ -14,6 +14,7 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
@@ -21,6 +22,8 @@ import org.springframework.web.server.ResponseStatusException;
 import java.io.ByteArrayOutputStream;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -51,7 +54,8 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public Page<Trade> getTrades(int page, int size) {
-        return tradeRepository.findAll(PageRequest.of(page, size));
+        Sort sort=Sort.by("tradeDate").descending();
+        return tradeRepository.findAll(PageRequest.of(page, size,sort));
     }
 
     @Override
@@ -82,23 +86,29 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public TradeStatsDTO getGlobalStats() {
+
         Long totalClosed = tradeRepository.countByStatus("Closed");
         Long totalOpen = tradeRepository.countByStatus("Open");
 
         Double realizedPnL = tradeRepository.calculateTotalRealizedPnL();
-        long wins = tradeRepository.countWinningTrades();
+        Double totalInvestment = tradeRepository.calculateTotalClosedInvestment();
 
         Double openEntryValue = tradeRepository.calculateOpenPositionsEntryValue();
 
-        // Avoid division by zero for Win Rate
-        double winRate = (totalClosed > 0) ? ((double) wins / totalClosed) * 100 : 0;
+        double roi = 0.0;
+
+        if (realizedPnL != null && totalInvestment != null && totalInvestment != 0) {
+            roi = (realizedPnL / totalInvestment) * 100;
+            roi = Math.round(roi * 100.0) / 100.0;
+        }
 
         return new TradeStatsDTO(
                 realizedPnL != null ? realizedPnL : 0.0,
-                Math.round(winRate * 100.0) / 100.0, // Round to 2 decimal places
+                roi,
                 totalClosed,
                 totalOpen,
-                openEntryValue != null ? openEntryValue : 0.0
+                openEntryValue != null ? openEntryValue : 0.0,
+                getStockWisePL()
         );
     }
 
@@ -151,5 +161,15 @@ public class TradeServiceImpl implements TradeService {
 
     private void setNumeric(Cell cell, Double value) {
         if (value != null) cell.setCellValue(value);
+    }
+
+    private Map<String, Double> getStockWisePL() {
+        List<Object[]> results = tradeRepository.calculateStockWisePL();
+
+        return results.stream()
+                .collect(Collectors.toMap(
+                        row -> (String) row[0],
+                        row -> (Double) row[1]
+                ));
     }
 }
