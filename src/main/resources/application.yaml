@@ -1,8 +1,6 @@
 spring:
   application:
     name: tracker
-  server:
-    port: 8080
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -18,6 +16,17 @@ spring:
         format_sql: false
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
+server:
+  port: 8080
+
 kotak:
   auth:
     token: ${KOTAK_TOKEN}
+
+firebase:
+  config:
+    path: ${FIREBASE_CONFIG_PATH}
+
+
+frontend:
+  url: ${FRONTEND_URL}
