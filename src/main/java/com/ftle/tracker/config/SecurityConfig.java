@@ -9,11 +9,13 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CorsFilter;
 
+import java.util.List;
+
 @Configuration
 public class SecurityConfig {
 
     @Value("${frontend.url}")
-    private String frontendUrl;
+    private List<String> frontendUrl;
 
     @Bean
     public FilterRegistrationBean<FirebaseAuthFilter> firebaseFilter(
@@ -32,7 +34,7 @@ public class SecurityConfig {
 
             CorsConfiguration config = new CorsConfiguration();
             config.setAllowCredentials(true);
-            config.addAllowedOrigin(frontendUrl);
+            config.setAllowedOrigins(frontendUrl);
             config.addAllowedHeader("*");
             config.addAllowedMethod("*");
 
