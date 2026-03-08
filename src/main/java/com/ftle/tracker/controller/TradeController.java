@@ -29,9 +29,11 @@ public class TradeController {
     @GetMapping("/public/trades")
     public Page<Trade> getTrades(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "ALL") String financialYear
+
     ) {
-        return tradeService.getTrades(page, size);
+        return tradeService.getTrades(page, size,financialYear);
     }
 
     @AdminOnly
@@ -44,14 +46,14 @@ public class TradeController {
     }
 
     @GetMapping("/public/stats")
-    public ResponseEntity<TradeStatsDTO> getTradeStats() {
-        return ResponseEntity.ok(tradeService.getGlobalStats());
+    public ResponseEntity<TradeStatsDTO> getTradeStats(@RequestParam(defaultValue = "All") String financialYear) {
+        return ResponseEntity.ok(tradeService.getGlobalStats(financialYear));
     }
 
     @GetMapping("/private/export")
-    public ResponseEntity<byte[]> exportExcel() throws Exception {
+    public ResponseEntity<byte[]> exportExcel(@RequestParam(defaultValue = "All") String financialYear) throws Exception {
 
-        byte[] file = tradeService.exportTradesToExcel();
+        byte[] file = tradeService.exportTradesToExcel(financialYear);
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,

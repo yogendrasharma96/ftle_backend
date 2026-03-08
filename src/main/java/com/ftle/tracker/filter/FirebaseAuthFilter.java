@@ -1,5 +1,7 @@
 package com.ftle.tracker.filter;
 
+import com.ftle.tracker.dto.UserDetails;
+import com.ftle.tracker.interceptor.UserContext;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.auth.FirebaseAuthException;
 import com.google.firebase.auth.FirebaseToken;
@@ -42,17 +44,28 @@ public class FirebaseAuthFilter extends OncePerRequestFilter {
             FirebaseToken decodedToken =
                     FirebaseAuth.getInstance().verifyIdToken(token);
 
-            request.setAttribute("uid", decodedToken.getUid());
-            request.setAttribute("email", decodedToken.getEmail());
+            String uid = decodedToken.getUid();
+            String email = decodedToken.getEmail();
+            String role = (String) decodedToken.getClaims()
+                    .getOrDefault("role", "USER");
+            request.setAttribute("uid", uid);
+            request.setAttribute("email", email);
             request.setAttribute(
                     "role",
-                    decodedToken.getClaims().getOrDefault("role", "USER")
+                    role
             );
+
+            UserDetails user = new UserDetails(uid, email, role);
+            UserContext.set(user);
+
 
             filterChain.doFilter(request, response);
 
         } catch (FirebaseAuthException e) {
             writeError(response, 401, "Invalid or expired token");
+        }
+        finally {
+            UserContext.clear();
         }
     }
 
