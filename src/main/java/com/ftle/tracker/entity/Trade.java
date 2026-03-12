@@ -12,7 +12,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "tradesEx")
+@Table(name = "trades")
 @Getter
 @Setter
 @NoArgsConstructor

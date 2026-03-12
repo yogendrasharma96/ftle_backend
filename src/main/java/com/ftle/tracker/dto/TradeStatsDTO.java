@@ -26,7 +26,8 @@ public class TradeStatsDTO {
         this.totalClosed = totalClosed != null ? totalClosed : 0;
         this.totalOpen = totalOpen != null ? totalOpen : 0;
         this.openPositionsEntryValue = openPositionsEntryValue != null ? BigDecimal.valueOf(openPositionsEntryValue) : BigDecimal.valueOf(0.0);
-        BigDecimal finalInvestment=BigDecimal.valueOf(totalInvestment);
+        double investment = totalInvestment == null ? 0.0 : totalInvestment;
+        BigDecimal finalInvestment = BigDecimal.valueOf(investment);
         BigDecimal roiValue = BigDecimal.ZERO;
         if (realizedPnL != null &&
                 finalInvestment != null &&
