@@ -9,11 +9,11 @@ import org.springframework.data.domain.Page;
 public interface TradeService {
     Trade saveTrade(TradeRequest request);
 
-    Page<Trade> getTrades(int page, int size);
+    Page<Trade> getTrades(int page, int size,String financialYear);
 
     Trade updateTrade(Long id, TradeRequest body);
 
-    TradeStatsDTO getGlobalStats();
+    TradeStatsDTO getGlobalStats(String financialYear);
 
-    byte[] exportTradesToExcel() throws Exception;
+    byte[] exportTradesToExcel(String financialYear) throws Exception;
 }

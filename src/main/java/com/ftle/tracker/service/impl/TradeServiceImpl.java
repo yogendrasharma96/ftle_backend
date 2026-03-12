@@ -1,5 +1,6 @@
 package com.ftle.tracker.service.impl;
 
+import com.ftle.tracker.dto.OpenPositionDto;
 import com.ftle.tracker.dto.TradeRequest;
 import com.ftle.tracker.dto.TradeStatsDTO;
 import com.ftle.tracker.entity.Trade;
@@ -7,6 +8,7 @@ import com.ftle.tracker.repository.TradeRepository;
 import com.ftle.tracker.service.MarketFeedService;
 import com.ftle.tracker.service.TradeService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
@@ -20,42 +22,52 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
-import java.time.LocalDateTime;
+import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class TradeServiceImpl implements TradeService {
     private final TradeRepository tradeRepository;
     private final MarketFeedService marketFeedService;
 
     @Override
     public Trade saveTrade(TradeRequest request) {
+        log.info("Saving trade for symbol: {} in FY: {}", request.getSymbol(), request.getFinancialYear());
 
-
-            Trade trade = Trade.builder()
-                    .symbol(request.getSymbol())
-                    .type(request.getType())
-                    .entryPrice(request.getEntryPrice())
-                    .exitPrice(request.getExitPrice())
-                    .quantity(request.getQuantity())
-                    .status(request.getStatus())
-                    .tradeDate(request.getTradeDate())
-                    .notes(request.getNotes())
-                    .createdAt(LocalDateTime.now())
-                    .build();
+        Trade trade = Trade.builder()
+                .symbol(request.getSymbol())
+                .exchange(request.getExchange())
+                .segment(request.getSegment())
+                .type(request.getType())
+                .entryPrice(request.getEntryPrice())
+                .exitPrice(request.getExitPrice())
+                .stopLoss(request.getStopLoss())
+                .targetPrice(request.getTargetPrice())
+                .quantity(request.getQuantity())
+                .status(request.getStatus())
+                .financialYear(request.getFinancialYear())
+                .entryTradeDate(request.getEntryTradeDate())
+                .exitTradeDate(request.getExitTradeDate())
+                .notes(request.getNotes())
+                .build();
 
         Trade savedTrade = tradeRepository.save(trade);
+
+        // Refreshing cache ensures the 'liveQuotes' loop picks up the new symbol immediately
         marketFeedService.refreshCache();
+
         return savedTrade;
     }
 
     @Override
-    public Page<Trade> getTrades(int page, int size) {
-        Sort sort=Sort.by("tradeDate").descending();
-        return tradeRepository.findAll(PageRequest.of(page, size,sort));
+    public Page<Trade> getTrades(int page, int size, String financialYear) {
+        Sort sort = Sort.by("entryTradeDate").descending();
+        if (!financialYear.equalsIgnoreCase("ALL")) {
+            return tradeRepository.findByFinancialYear(PageRequest.of(page, size, sort), financialYear);
+        }
+        return tradeRepository.findAll(PageRequest.of(page, size, sort));
     }
 
     @Override
@@ -63,69 +75,74 @@ public class TradeServiceImpl implements TradeService {
         Trade trade = tradeRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
-                        "Trade not found"
+                        "Trade with ID " + id + " not found"
                 ));
 
+        // Map the new fields from the DTO to the existing Entity
         mapToEntity(trade, body);
-        return tradeRepository.save(trade);
+
+        Trade updatedTrade = tradeRepository.save(trade);
+
+        // Refresh market cache in case the symbol was changed during update
+        marketFeedService.refreshCache();
+
+        return updatedTrade;
     }
 
-    private Trade mapToEntity(Trade trade, TradeRequest req) {
-
+    private void mapToEntity(Trade trade, TradeRequest req) {
         trade.setSymbol(req.getSymbol());
+        trade.setExchange(req.getExchange());
+        trade.setSegment(req.getSegment());
         trade.setType(req.getType());
+
         trade.setEntryPrice(req.getEntryPrice());
         trade.setExitPrice(req.getExitPrice());
+        trade.setStopLoss(req.getStopLoss());
+        trade.setTargetPrice(req.getTargetPrice());
+
         trade.setQuantity(req.getQuantity());
-        trade.setTradeDate(req.getTradeDate());
         trade.setStatus(req.getStatus());
+        trade.setFinancialYear(req.getFinancialYear());
+
+        trade.setEntryTradeDate(req.getEntryTradeDate());
+        trade.setExitTradeDate(req.getExitTradeDate());
+
         trade.setNotes(req.getNotes());
 
-        return trade;
     }
 
     @Override
-    public TradeStatsDTO getGlobalStats() {
+    public TradeStatsDTO getGlobalStats(String financialYear) {
 
-        Long totalClosed = tradeRepository.countByStatus("Closed");
-        Long totalOpen = tradeRepository.countByStatus("Open");
+        TradeStatsDTO globalStats=tradeRepository.getGlobalStats(financialYear);
+        List<OpenPositionDto> openPositionsSummary = tradeRepository.getOpenPositionsSummary(financialYear);
+        globalStats.setOpenPositionDtos(openPositionsSummary);
 
-        Double realizedPnL = tradeRepository.calculateTotalRealizedPnL();
-        Double totalInvestment = tradeRepository.calculateTotalClosedInvestment();
+        return globalStats;
+    }
 
-        Double openEntryValue = tradeRepository.calculateOpenPositionsEntryValue();
+    @Override
+    public byte[] exportTradesToExcel(String financialYear) throws Exception {
 
-        double roi = 0.0;
-
-        if (realizedPnL != null && totalInvestment != null && totalInvestment != 0) {
-            roi = (realizedPnL / totalInvestment) * 100;
-            roi = Math.round(roi * 100.0) / 100.0;
+        List<Trade> trades;
+        if (!financialYear.equalsIgnoreCase("ALL")) {
+            trades= tradeRepository.findByFinancialYear(financialYear);
+        }else {
+            trades= tradeRepository.findAll();
         }
-
-        return new TradeStatsDTO(
-                realizedPnL != null ? realizedPnL : 0.0,
-                roi,
-                totalClosed,
-                totalOpen,
-                openEntryValue != null ? openEntryValue : 0.0,
-                getStockWisePL()
-        );
-    }
-
-    @Override
-    public byte[] exportTradesToExcel() throws Exception {
-
-        List<Trade> trades = tradeRepository.findAll();
 
         Workbook workbook = new XSSFWorkbook();
         Sheet sheet = workbook.createSheet("Trades");
 
-        Row header = sheet.createRow(0);
-
         String[] columns = {
-                "Symbol", "Type", "Entry Price","Exit Price", "Quantity",
-                "Status", "Trade Date","Creation Date", "Notes"
+                "Symbol", "Exchange", "Segment", "Type",
+                "Entry Price", "Exit Price", "Stop Loss", "Target Price",
+                "Quantity", "Financial Year", "Status",
+                "Entry Trade Date", "Exit Trade Date",
+                "Created At", "Updated At", "Notes"
         };
+
+        Row header = sheet.createRow(0);
 
         for (int i = 0; i < columns.length; i++) {
             header.createCell(i).setCellValue(columns[i]);
@@ -138,14 +155,35 @@ public class TradeServiceImpl implements TradeService {
             Row row = sheet.createRow(rowIdx++);
 
             row.createCell(0).setCellValue(t.getSymbol());
-            row.createCell(1).setCellValue(t.getType());
-            setNumeric(row.createCell(2),t.getEntryPrice());
-            setNumeric(row.createCell(3),t.getExitPrice());
-            row.createCell(4).setCellValue(t.getQuantity());
-            row.createCell(5).setCellValue(t.getStatus());
-            row.createCell(6).setCellValue(t.getTradeDate().toString());
-            row.createCell(7).setCellValue(t.getCreatedAt().toString());
-            row.createCell(8).setCellValue(t.getNotes());
+            row.createCell(1).setCellValue(t.getExchange());
+            row.createCell(2).setCellValue(t.getSegment());
+            row.createCell(3).setCellValue(t.getType());
+
+            setNumeric(row.createCell(4), doubleNullChecks(t.getEntryPrice()));
+            setNumeric(row.createCell(5), doubleNullChecks(t.getExitPrice()));
+            setNumeric(row.createCell(6), doubleNullChecks(t.getStopLoss()));
+            setNumeric(row.createCell(7), doubleNullChecks(t.getTargetPrice()));
+
+            if (t.getQuantity() != null) {
+                row.createCell(8).setCellValue(t.getQuantity());
+            }
+
+            row.createCell(9).setCellValue(t.getFinancialYear());
+            row.createCell(10).setCellValue(t.getStatus());
+
+            if (t.getEntryTradeDate() != null)
+                row.createCell(11).setCellValue(t.getEntryTradeDate().toString());
+
+            if (t.getExitTradeDate() != null)
+                row.createCell(12).setCellValue(t.getExitTradeDate().toString());
+
+            if (t.getCreatedAt() != null)
+                row.createCell(13).setCellValue(t.getCreatedAt().toString());
+
+            if (t.getUpdatedAt() != null)
+                row.createCell(14).setCellValue(t.getUpdatedAt().toString());
+
+            row.createCell(15).setCellValue(t.getNotes());
         }
 
         for (int i = 0; i < columns.length; i++) {
@@ -159,17 +197,14 @@ public class TradeServiceImpl implements TradeService {
         return out.toByteArray();
     }
 
-    private void setNumeric(Cell cell, Double value) {
-        if (value != null) cell.setCellValue(value);
+    private Double doubleNullChecks(BigDecimal val) {
+        if(val!=null){
+            return val.doubleValue();
+        }
+        return null;
     }
 
-    private Map<String, Double> getStockWisePL() {
-        List<Object[]> results = tradeRepository.calculateStockWisePL();
-
-        return results.stream()
-                .collect(Collectors.toMap(
-                        row -> (String) row[0],
-                        row -> (Double) row[1]
-                ));
+    private void setNumeric(Cell cell, Double value) {
+        if (value != null) cell.setCellValue(value);
     }
 }
