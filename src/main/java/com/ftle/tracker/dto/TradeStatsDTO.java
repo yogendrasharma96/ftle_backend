@@ -16,6 +16,9 @@ public class TradeStatsDTO {
     private BigDecimal openPositionsEntryValue;
     private List<OpenPositionDto> openPositionDtos;
 
+    private List<EquityPointDTO> equityCurve;
+    private List<MonthlyHeatmapDTO> monthlyHeatmap;
+
     public TradeStatsDTO(Double realizedPnL,
                          Double totalInvestment,
                          Long totalClosed,

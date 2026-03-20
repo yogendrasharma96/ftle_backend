@@ -1,5 +1,6 @@
 package com.ftle.tracker.entity;
 
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.*;
 import lombok.*;
 import org.springframework.data.annotation.CreatedBy;
@@ -10,6 +11,7 @@ import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Entity
 @Table(name = "trades")
@@ -35,10 +37,14 @@ public class Trade {
     private Integer quantity;
     private String financialYear; // e.g., "2024-25"
     private String status; // OPEN, CLOSED
+    private String sector;
     private LocalDate entryTradeDate;
     private LocalDate exitTradeDate;
     @Column(length = 1000)
     private String notes;
+    @OneToMany(mappedBy = "trade", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonManagedReference
+    private List<TradeImage> images;
     @CreatedDate
     @Column(updatable = false)
     private LocalDateTime createdAt;

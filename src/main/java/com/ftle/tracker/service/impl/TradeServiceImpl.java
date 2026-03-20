@@ -1,9 +1,8 @@
 package com.ftle.tracker.service.impl;
 
-import com.ftle.tracker.dto.OpenPositionDto;
-import com.ftle.tracker.dto.TradeRequest;
-import com.ftle.tracker.dto.TradeStatsDTO;
+import com.ftle.tracker.dto.*;
 import com.ftle.tracker.entity.Trade;
+import com.ftle.tracker.entity.TradeImage;
 import com.ftle.tracker.repository.TradeRepository;
 import com.ftle.tracker.service.MarketFeedService;
 import com.ftle.tracker.service.TradeService;
@@ -19,11 +18,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
-import java.util.List;
+import java.time.LocalDate;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +35,7 @@ public class TradeServiceImpl implements TradeService {
     private final MarketFeedService marketFeedService;
 
     @Override
+    @Transactional
     public Trade saveTrade(TradeRequest request) {
         log.info("Saving trade for symbol: {} in FY: {}", request.getSymbol(), request.getFinancialYear());
 
@@ -47,11 +50,30 @@ public class TradeServiceImpl implements TradeService {
                 .targetPrice(request.getTargetPrice())
                 .quantity(request.getQuantity())
                 .status(request.getStatus())
+                .sector(request.getSector())
                 .financialYear(request.getFinancialYear())
                 .entryTradeDate(request.getEntryTradeDate())
                 .exitTradeDate(request.getExitTradeDate())
                 .notes(request.getNotes())
                 .build();
+
+        if (request.getImages() != null && !request.getImages().isEmpty()) {
+
+            List<TradeImage> images = request.getImages()
+                    .stream()
+                    .map(img -> {
+
+                        TradeImage image = new TradeImage();
+                        image.setImageUrl(img.getImageUrl());
+                        image.setCaption(img.getCaption());
+                        image.setTrade(trade);   // important (owning side)
+
+                        return image;
+
+                    }).toList();
+
+            trade.setImages(images);
+        }
 
         Trade savedTrade = tradeRepository.save(trade);
 
@@ -70,55 +92,210 @@ public class TradeServiceImpl implements TradeService {
         return tradeRepository.findAll(PageRequest.of(page, size, sort));
     }
 
+    @Transactional
     @Override
     public Trade updateTrade(Long id, TradeRequest body) {
+
         Trade trade = tradeRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Trade with ID " + id + " not found"
                 ));
 
-        // Map the new fields from the DTO to the existing Entity
-        mapToEntity(trade, body);
+        Integer existingQty = trade.getQuantity();
+        Integer requestedQty = body.getQuantity();
+
+        if (body.getImages() != null) {
+            updateTradeImages(trade, body.getImages());
+        }
+
+    /*
+       CASE 1: Admin is closing the trade
+    */
+        if ("Closed".equalsIgnoreCase(body.getStatus())) {
+
+            if (requestedQty > existingQty) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Sell quantity exceeds available position"
+                );
+            }
+
+        /*
+           CASE 1A: Partial Close
+        */
+            if (requestedQty < existingQty) {
+
+                Trade closedTrade = new Trade();
+
+                // copy existing trade fields
+                closedTrade.setSymbol(trade.getSymbol());
+                closedTrade.setExchange(trade.getExchange());
+                closedTrade.setSegment(trade.getSegment());
+                closedTrade.setType(trade.getType());
+                closedTrade.setSector(trade.getSector());
+                closedTrade.setEntryPrice(trade.getEntryPrice());
+                closedTrade.setExitPrice(body.getExitPrice());
+
+                closedTrade.setQuantity(requestedQty);
+                closedTrade.setStatus("Closed");
+
+                closedTrade.setFinancialYear(trade.getFinancialYear());
+
+                closedTrade.setEntryTradeDate(trade.getEntryTradeDate());
+                closedTrade.setExitTradeDate(
+                        body.getExitTradeDate() != null
+                                ? body.getExitTradeDate()
+                                : LocalDate.now()
+                );
+
+                closedTrade.setNotes(body.getNotes());
+
+                tradeRepository.save(closedTrade);
+
+                // reduce remaining quantity in original trade
+                trade.setQuantity(existingQty - requestedQty);
+
+                tradeRepository.save(trade);
+
+                marketFeedService.refreshCache();
+
+                return closedTrade;
+            }
+
+        /*
+           CASE 1B: Full Close
+        */
+            trade.setExitPrice(body.getExitPrice());
+            trade.setExitTradeDate(
+                    body.getExitTradeDate() != null
+                            ? body.getExitTradeDate()
+                            : LocalDate.now()
+            );
+            trade.setStatus("Closed");
+
+        } else {
+
+        /*
+           CASE 2: Normal update
+        */
+            mapToEntity(trade, body);
+        }
 
         Trade updatedTrade = tradeRepository.save(trade);
 
-        // Refresh market cache in case the symbol was changed during update
         marketFeedService.refreshCache();
 
         return updatedTrade;
     }
 
+    private void updateTradeImages(Trade trade, List<TradeImageDto> imageDtos) {
+        // 1. Clear existing images if you want to replace them,
+        // or skip if you only want to append.
+        trade.getImages().clear();
+
+        // 2. Map DTOs to Entities and set the back-reference
+        List<TradeImage> newImages = imageDtos.stream().map(dto -> {
+            TradeImage img = new TradeImage();
+            img.setImageUrl(dto.getImageUrl());
+            img.setTrade(trade); // CRITICAL: Link back to parent
+            return img;
+        }).collect(Collectors.toList());
+
+        trade.getImages().addAll(newImages);
+    }
+
     private void mapToEntity(Trade trade, TradeRequest req) {
+
         trade.setSymbol(req.getSymbol());
         trade.setExchange(req.getExchange());
         trade.setSegment(req.getSegment());
         trade.setType(req.getType());
 
         trade.setEntryPrice(req.getEntryPrice());
-        trade.setExitPrice(req.getExitPrice());
+
+        if (req.getExitPrice() != null)
+            trade.setExitPrice(req.getExitPrice());
+
         trade.setStopLoss(req.getStopLoss());
         trade.setTargetPrice(req.getTargetPrice());
-
+        trade.setSector(req.getSector());
         trade.setQuantity(req.getQuantity());
+
         trade.setStatus(req.getStatus());
         trade.setFinancialYear(req.getFinancialYear());
 
         trade.setEntryTradeDate(req.getEntryTradeDate());
-        trade.setExitTradeDate(req.getExitTradeDate());
+
+        if (req.getExitTradeDate() != null)
+            trade.setExitTradeDate(req.getExitTradeDate());
 
         trade.setNotes(req.getNotes());
-
     }
 
     @Override
     public TradeStatsDTO getGlobalStats(String financialYear) {
 
-        TradeStatsDTO globalStats=tradeRepository.getGlobalStats(financialYear);
+        TradeStatsDTO globalStats = tradeRepository.getGlobalStats(financialYear);
         List<OpenPositionDto> openPositionsSummary = tradeRepository.getOpenPositionsSummary(financialYear);
         globalStats.setOpenPositionDtos(openPositionsSummary);
-
+        getEquityAndHeatMapData(globalStats, financialYear);
         return globalStats;
+    }
+
+    public void getEquityAndHeatMapData(TradeStatsDTO stats, String financialYear) {
+
+        List<TradePerformanceRow> rows =
+                tradeRepository.getPerformanceData(financialYear);
+
+        Map<LocalDate, Double> dailyPnL = new TreeMap<>();
+        Map<String, Double> monthlyPnL = new HashMap<>();
+
+        for (TradePerformanceRow r : rows) {
+
+            double pnl = (r.getExitPrice() - r.getEntryPrice()) * r.getQuantity();
+
+            LocalDate date = r.getExitTradeDate();
+
+            // daily aggregation
+            dailyPnL.merge(date, pnl, Double::sum);
+
+            // monthly aggregation
+            String key = date.getYear() + "-" + date.getMonthValue();
+            monthlyPnL.merge(key, pnl, Double::sum);
+        }
+
+        // build equity curve
+        List<EquityPointDTO> equity = new ArrayList<>();
+        double cumulative = 0;
+
+        for (Map.Entry<LocalDate, Double> e : dailyPnL.entrySet()) {
+
+            cumulative += e.getValue();
+
+            equity.add(new EquityPointDTO(
+                    e.getKey(),
+                    cumulative
+            ));
+        }
+
+        // build heatmap
+        List<MonthlyHeatmapDTO> heatmap = new ArrayList<>();
+
+        for (Map.Entry<String, Double> e : monthlyPnL.entrySet()) {
+
+            String[] parts = e.getKey().split("-");
+
+            heatmap.add(new MonthlyHeatmapDTO(
+                    Integer.parseInt(parts[0]),
+                    Integer.parseInt(parts[1]),
+                    e.getValue()
+            ));
+        }
+
+        stats.setEquityCurve(equity);
+        stats.setMonthlyHeatmap(heatmap);
+
     }
 
     @Override
@@ -126,9 +303,9 @@ public class TradeServiceImpl implements TradeService {
 
         List<Trade> trades;
         if (!financialYear.equalsIgnoreCase("ALL")) {
-            trades= tradeRepository.findByFinancialYear(financialYear);
-        }else {
-            trades= tradeRepository.findAll();
+            trades = tradeRepository.findByFinancialYear(financialYear);
+        } else {
+            trades = tradeRepository.findAll();
         }
 
         Workbook workbook = new XSSFWorkbook();
@@ -184,6 +361,7 @@ public class TradeServiceImpl implements TradeService {
                 row.createCell(14).setCellValue(t.getUpdatedAt().toString());
 
             row.createCell(15).setCellValue(t.getNotes());
+            row.createCell(16).setCellValue(t.getSector());
         }
 
         for (int i = 0; i < columns.length; i++) {
@@ -198,7 +376,7 @@ public class TradeServiceImpl implements TradeService {
     }
 
     private Double doubleNullChecks(BigDecimal val) {
-        if(val!=null){
+        if (val != null) {
             return val.doubleValue();
         }
         return null;

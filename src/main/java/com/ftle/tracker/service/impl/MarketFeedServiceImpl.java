@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -83,7 +84,13 @@ public class MarketFeedServiceImpl implements MarketFeedService {
                         .map(x -> x.getPExchSeg() + "|" + x.getPSymbol())
                         .toList();
 
-        return quoteService.getLtp(symbols);
+        List<QuoteLtpResponse> stocks = quoteService.getLtp(symbols);
+        List<QuoteLtpResponse> indices = quoteService.getIndicesLtp();
+
+        List<QuoteLtpResponse> all = new ArrayList<>();
+        all.addAll(stocks);
+        all.addAll(indices);
+        return all;
     }
 
     @Override
