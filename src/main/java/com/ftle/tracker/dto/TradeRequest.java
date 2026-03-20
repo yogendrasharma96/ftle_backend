@@ -1,9 +1,11 @@
 package com.ftle.tracker.dto;
 
+import com.ftle.tracker.entity.TradeImage;
 import lombok.Data;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.List;
 
 @Data
 public class TradeRequest {
@@ -17,8 +19,11 @@ public class TradeRequest {
     private BigDecimal targetPrice;
     private Integer quantity;
     private String status;
+    private String sector;
     private String financialYear;
     private LocalDate entryTradeDate;
     private LocalDate exitTradeDate;
     private String notes;
+
+    private List<TradeImageDto> images;
 }

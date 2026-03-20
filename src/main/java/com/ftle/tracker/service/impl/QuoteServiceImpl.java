@@ -29,4 +29,18 @@ public class QuoteServiceImpl implements QuoteService {
                 .collectList()
                 .block();
     }
+
+    @Override
+    public List<QuoteLtpResponse> getIndicesLtp() {
+        return kotakWebClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .scheme("https")
+                        .host("mis.kotaksecurities.com")
+                        .path("/script-details/1.0/quotes/neosymbol/nse_cm|Nifty 50,nse_cm|Nifty Bank,nse_cm|Nifty IT,nse_cm|Nifty Auto,nse_cm|Nifty FMCG,nse_cm|Nifty Pharma,nse_cm|Nifty Metal,nse_cm|Nifty Infra,nse_cm|Nifty Energy,bse_cm|SENSEX/scrip_details")
+                        .build())
+                .retrieve()
+                .bodyToFlux(QuoteLtpResponse.class)
+                .collectList()
+                .block();
+    }
 }

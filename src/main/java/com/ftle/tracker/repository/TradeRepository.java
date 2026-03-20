@@ -1,6 +1,7 @@
 package com.ftle.tracker.repository;
 
 import com.ftle.tracker.dto.OpenPositionDto;
+import com.ftle.tracker.dto.TradePerformanceRow;
 import com.ftle.tracker.dto.TradeStatsDTO;
 import com.ftle.tracker.entity.Trade;
 import org.springframework.data.domain.Page;
@@ -18,25 +19,16 @@ public interface TradeRepository extends JpaRepository<Trade, Long> {
     Set<String> getAllSymbol();
 
     @Query("""
-               SELECT t.symbol,
-                      SUM((t.exitPrice - t.entryPrice) * t.quantity)
-               FROM Trade t
-               WHERE t.status = 'Closed'
-               GROUP BY t.symbol
+            SELECT new com.ftle.tracker.dto.OpenPositionDto(
+                   t.symbol, 
+                   SUM(t.quantity), 
+                   CAST(SUM(t.entryPrice * t.quantity) / SUM(t.quantity) AS double)
+            )
+            FROM Trade t
+            WHERE t.status = 'Open'
+            AND (:financialYear = 'ALL' OR t.financialYear = :financialYear)
+            GROUP BY t.symbol
             """)
-    List<Object[]> calculateStockWisePL();
-
-    @Query("""
-    SELECT new com.ftle.tracker.dto.OpenPositionDto(
-           t.symbol, 
-           SUM(t.quantity), 
-           CAST(SUM(t.entryPrice * t.quantity) / SUM(t.quantity) AS double)
-    )
-    FROM Trade t
-    WHERE t.status = 'Open'
-    AND (:financialYear = 'ALL' OR t.financialYear = :financialYear)
-    GROUP BY t.symbol
-    """)
     List<OpenPositionDto> getOpenPositionsSummary(@Param("financialYear") String financialYear);
 
     Page<Trade> findByFinancialYear(Pageable pageable, String financialYear);
@@ -55,4 +47,18 @@ public interface TradeRepository extends JpaRepository<Trade, Long> {
             WHERE (:financialYear = 'ALL' OR t.financialYear = :financialYear)
             """)
     TradeStatsDTO getGlobalStats(@Param("financialYear") String financialYear);
+
+    @Query("""
+            SELECT
+                t.exitTradeDate as exitTradeDate,
+                t.entryPrice as entryPrice,
+                t.exitPrice as exitPrice,
+                t.quantity as quantity
+            FROM Trade t
+            WHERE t.status = 'Closed'
+            AND (:financialYear = 'ALL' OR t.financialYear = :financialYear)
+            ORDER BY t.exitTradeDate
+            """)
+    List<TradePerformanceRow> getPerformanceData(
+            @Param("financialYear") String financialYear);
 }

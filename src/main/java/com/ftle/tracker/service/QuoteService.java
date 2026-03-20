@@ -6,4 +6,6 @@ import java.util.List;
 
 public interface QuoteService {
     List<QuoteLtpResponse> getLtp(List<String> symbols);
+
+    List<QuoteLtpResponse> getIndicesLtp();
 }
