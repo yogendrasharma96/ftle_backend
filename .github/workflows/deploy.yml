@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Login to Docker Hub
         run: echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
@@ -43,5 +43,8 @@ jobs:
               -e KOTAK_TOKEN=${{ secrets.KOTAK_TOKEN }} \
               -e FIREBASE_CONFIG_PATH=/app/firebase.json \
               -e FRONTEND_URL=${{ secrets.FRONTEND_URL }} \
+              -e CLOUDINARY_CLOUD_NAME=${{ secrets.CLOUDINARY_CLOUD_NAME }} \
+              -e CLOUDINARY_API_KEY=${{ secrets.CLOUDINARY_API_KEY }} \
+              -e CLOUDINARY_API_SECRET=${{ secrets.CLOUDINARY_API_SECRET }} \
               -v /home/ubuntu/firebase.json:/app/firebase.json \
               ${{ secrets.DOCKER_USER }}/tracker:latest
