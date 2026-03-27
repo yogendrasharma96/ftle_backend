@@ -11,6 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 public interface TradeRepository extends JpaRepository<Trade, Long> {
@@ -61,4 +62,6 @@ public interface TradeRepository extends JpaRepository<Trade, Long> {
             """)
     List<TradePerformanceRow> getPerformanceData(
             @Param("financialYear") String financialYear);
+
+    Optional<Trade> findBySymbolAndStatusIgnoreCase(String symbol, String open);
 }

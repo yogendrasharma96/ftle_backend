@@ -50,6 +50,7 @@ public class TradeController {
         return ResponseEntity.ok(tradeService.getGlobalStats(financialYear));
     }
 
+    @AdminOnly
     @GetMapping("/private/export")
     public ResponseEntity<byte[]> exportExcel(@RequestParam(defaultValue = "All") String financialYear) throws Exception {
 

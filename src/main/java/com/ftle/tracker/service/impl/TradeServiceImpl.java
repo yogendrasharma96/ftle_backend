@@ -23,6 +23,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -37,47 +38,77 @@ public class TradeServiceImpl implements TradeService {
     @Override
     @Transactional
     public Trade saveTrade(TradeRequest request) {
-        log.info("Saving trade for symbol: {} in FY: {}", request.getSymbol(), request.getFinancialYear());
+        log.info("Processing trade for symbol: {} in FY: {}", request.getSymbol(), request.getFinancialYear());
 
-        Trade trade = Trade.builder()
-                .symbol(request.getSymbol())
-                .exchange(request.getExchange())
-                .segment(request.getSegment())
-                .type(request.getType())
-                .entryPrice(request.getEntryPrice())
-                .exitPrice(request.getExitPrice())
-                .stopLoss(request.getStopLoss())
-                .targetPrice(request.getTargetPrice())
-                .quantity(request.getQuantity())
-                .status(request.getStatus())
-                .sector(request.getSector())
-                .financialYear(request.getFinancialYear())
-                .entryTradeDate(request.getEntryTradeDate())
-                .exitTradeDate(request.getExitTradeDate())
-                .notes(request.getNotes())
-                .build();
+        // 1. Check if an OPEN position already exists for this symbol
+        // Using ignoreCase for "OPEN" to avoid string mismatch issues
+        Optional<Trade> existingTradeOpt = tradeRepository.findBySymbolAndStatusIgnoreCase(
+                request.getSymbol(), "OPEN");
 
+        Trade tradeToSave;
+
+        if (existingTradeOpt.isPresent()) {
+            tradeToSave = existingTradeOpt.get();
+            log.info("Existing open trade found. Averaging position for ID: {}", tradeToSave.getId());
+
+            // 2. Calculate New Weighted Average Entry Price
+            // Formula: ((Old Qty * Old Price) + (New Qty * New Price)) / (Total Qty)
+            BigDecimal oldTotalCost = tradeToSave.getEntryPrice()
+                    .multiply(new BigDecimal(tradeToSave.getQuantity()));
+            BigDecimal newTotalCost = request.getEntryPrice()
+                    .multiply(new BigDecimal(request.getQuantity()));
+
+            int totalQuantity = tradeToSave.getQuantity() + request.getQuantity();
+            BigDecimal newAvgPrice = oldTotalCost.add(newTotalCost)
+                    .divide(new BigDecimal(totalQuantity), 2, RoundingMode.HALF_UP);
+
+            // 3. Update existing entity
+            tradeToSave.setQuantity(totalQuantity);
+            tradeToSave.setEntryPrice(newAvgPrice);
+
+            // Optional: Append new notes to existing notes
+            if (request.getNotes() != null) {
+                tradeToSave.setNotes(tradeToSave.getNotes() + " | Avg added: " + request.getNotes());
+            }
+
+            // Update dates or other metadata if necessary
+            tradeToSave.setEntryTradeDate(request.getEntryTradeDate());
+        } else {
+            // 4. Create new trade if no open position exists
+            tradeToSave = Trade.builder()
+                    .symbol(request.getSymbol())
+                    .exchange(request.getExchange())
+                    .segment(request.getSegment())
+                    .type(request.getType())
+                    .entryPrice(request.getEntryPrice())
+                    .quantity(request.getQuantity())
+                    .status("OPEN")
+                    .sector(request.getSector())
+                    .financialYear(request.getFinancialYear())
+                    .entryTradeDate(request.getEntryTradeDate())
+                    .notes(request.getNotes())
+                    .build();
+        }
+
+        // 5. Handle Images (Common for both new and averaged trades)
         if (request.getImages() != null && !request.getImages().isEmpty()) {
-
-            List<TradeImage> images = request.getImages()
-                    .stream()
+            List<TradeImage> newImages = request.getImages().stream()
                     .map(img -> {
-
                         TradeImage image = new TradeImage();
                         image.setImageUrl(img.getImageUrl());
                         image.setCaption(img.getCaption());
-                        image.setTrade(trade);   // important (owning side)
-
+                        image.setTrade(tradeToSave);
                         return image;
-
                     }).toList();
 
-            trade.setImages(images);
+            if (tradeToSave.getImages() == null) {
+                tradeToSave.setImages(new ArrayList<>());
+            }
+            tradeToSave.getImages().addAll(newImages);
         }
 
-        Trade savedTrade = tradeRepository.save(trade);
-
-        // Refreshing cache ensures the 'liveQuotes' loop picks up the new symbol immediately
+        // 6. Persist and Refresh
+        Trade savedTrade = tradeRepository.save(tradeToSave);
         marketFeedService.refreshCache();
 
         return savedTrade;
@@ -85,7 +116,10 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     public Page<Trade> getTrades(int page, int size, String financialYear) {
-        Sort sort = Sort.by("entryTradeDate").descending();
+        Sort sort = Sort.by(
+                Sort.Order.desc("entryTradeDate"),
+                Sort.Order.desc("updatedAt").nullsLast()
+        );
         if (!financialYear.equalsIgnoreCase("ALL")) {
             return tradeRepository.findByFinancialYear(PageRequest.of(page, size, sort), financialYear);
         }
