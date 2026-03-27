@@ -21,7 +21,7 @@ jobs:
         run: docker push ${{ secrets.DOCKER_USER }}/tracker:latest
 
       - name: Deploy to EC2
-        uses: appleboy/ssh-action@v0.1.6
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ubuntu
