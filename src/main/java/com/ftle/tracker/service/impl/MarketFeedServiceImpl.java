@@ -41,6 +41,7 @@ public class MarketFeedServiceImpl implements MarketFeedService {
             log.error("Initial load failed", e);
         }
     }
+
     @Override
     public void refreshCache() {
         try {
@@ -54,6 +55,7 @@ public class MarketFeedServiceImpl implements MarketFeedService {
             log.error("Market refresh failed – keeping old cache", e);
         }
     }
+
     @Scheduled(cron = "*/5 * 9-15 ? * MON-FRI", zone = "Asia/Kolkata")
     public void refreshMarketData() {
         if (!isMarketOpen()) return;
@@ -62,22 +64,24 @@ public class MarketFeedServiceImpl implements MarketFeedService {
 
     private boolean isMarketOpen() {
         LocalTime now = LocalTime.now(ZoneId.of("Asia/Kolkata"));
-        return !now.isBefore(LocalTime.of(9,15))
-                && !now.isAfter(LocalTime.of(15,15));
+        return !now.isBefore(LocalTime.of(9, 15))
+                && !now.isAfter(LocalTime.of(15, 15));
     }
 
     private List<QuoteLtpResponse> fetchFromKotak() {
 
         Set<String> tradeSymbols = tradeRepository.getAllSymbol();
         if (tradeSymbols.isEmpty()) return latestQuotes.get();
-
+        List<QuoteLtpResponse> indices = quoteService.getIndicesLtp();
         List<ScripMasterDto> filtered =
                 scripMasterService.getScripMasterData()
                         .stream()
                         .filter(x -> tradeSymbols.contains(x.getPTrdSymbol()))
                         .toList();
 
-        if (filtered.isEmpty()) return latestQuotes.get();
+        if (filtered.isEmpty()) {
+            return indices.isEmpty() ? latestQuotes.get() : indices;
+        }
 
         List<String> symbols =
                 filtered.stream()
@@ -85,7 +89,6 @@ public class MarketFeedServiceImpl implements MarketFeedService {
                         .toList();
 
         List<QuoteLtpResponse> stocks = quoteService.getLtp(symbols);
-        List<QuoteLtpResponse> indices = quoteService.getIndicesLtp();
 
         List<QuoteLtpResponse> all = new ArrayList<>();
         all.addAll(stocks);
