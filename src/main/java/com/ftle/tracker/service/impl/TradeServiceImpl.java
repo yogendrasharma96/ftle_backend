@@ -82,7 +82,7 @@ public class TradeServiceImpl implements TradeService {
                     .type(request.getType())
                     .entryPrice(request.getEntryPrice())
                     .quantity(request.getQuantity())
-                    .status("OPEN")
+                    .status("Open")
                     .sector(request.getSector())
                     .financialYear(request.getFinancialYear())
                     .entryTradeDate(request.getEntryTradeDate())
