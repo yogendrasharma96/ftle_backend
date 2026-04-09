@@ -5,5 +5,5 @@ import com.ftle.tracker.dto.ScripMasterDto;
 import java.util.List;
 
 public interface ScripMasterService {
-     List<ScripMasterDto> getScripMasterData();
+     List<ScripMasterDto> getScripMasterData(String date);
 }
