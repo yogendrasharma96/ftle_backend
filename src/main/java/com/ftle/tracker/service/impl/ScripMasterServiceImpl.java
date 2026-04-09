@@ -24,10 +24,9 @@ import java.util.List;
 public class ScripMasterServiceImpl implements ScripMasterService {
     private final WebClient webTextClient;
 
-    @Cacheable(value = "scripMasterCache")
-    public List<ScripMasterDto> getScripMasterData() {
+    @Cacheable(value = "scripMasterCache", key = "#date")
+    public List<ScripMasterDto> getScripMasterData(String date) {
         log.info("Served from api");
-        String date = LocalDate.now().format(DateTimeFormatter.ISO_DATE);
 
         String url = String.format(
                 "https://lapi.kotaksecurities.com/wso2-scripmaster/v1/prod/%s/transformed-v1/nse_cm-v1.csv",

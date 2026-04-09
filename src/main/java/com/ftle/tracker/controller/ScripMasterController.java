@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 @RestController
@@ -18,6 +20,6 @@ public class ScripMasterController {
 
     @GetMapping("/public/scrips")
     public List<ScripMasterDto> getAllScrips() {
-        return service.getScripMasterData();
+        return service.getScripMasterData(LocalDate.now().format(DateTimeFormatter.ISO_DATE));
     }
 }

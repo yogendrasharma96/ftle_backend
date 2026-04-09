@@ -12,8 +12,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -34,7 +36,7 @@ public class MarketFeedServiceImpl implements MarketFeedService {
     @PostConstruct
     public void init() {
         try {
-            List<QuoteLtpResponse> data = fetchFromKotak();
+            List<QuoteLtpResponse> data = fetchFromKotak(LocalDate.now().format(DateTimeFormatter.ISO_DATE));
             latestQuotes.set(data);
             log.info("Initial market data loaded: {}", data.size());
         } catch (Exception e) {
@@ -45,7 +47,7 @@ public class MarketFeedServiceImpl implements MarketFeedService {
     @Override
     public void refreshCache() {
         try {
-            List<QuoteLtpResponse> fresh = fetchFromKotak();
+            List<QuoteLtpResponse> fresh = fetchFromKotak(LocalDate.now().format(DateTimeFormatter.ISO_DATE));
 
             if (!fresh.isEmpty()) {
                 latestQuotes.set(fresh);
@@ -68,13 +70,12 @@ public class MarketFeedServiceImpl implements MarketFeedService {
                 && !now.isAfter(LocalTime.of(15, 15));
     }
 
-    private List<QuoteLtpResponse> fetchFromKotak() {
-
+    private List<QuoteLtpResponse> fetchFromKotak(String date) {
         Set<String> tradeSymbols = tradeRepository.getAllSymbol();
         if (tradeSymbols.isEmpty()) return latestQuotes.get();
         List<QuoteLtpResponse> indices = quoteService.getIndicesLtp();
         List<ScripMasterDto> filtered =
-                scripMasterService.getScripMasterData()
+                scripMasterService.getScripMasterData(date)
                         .stream()
                         .filter(x -> tradeSymbols.contains(x.getPTrdSymbol()))
                         .toList();
