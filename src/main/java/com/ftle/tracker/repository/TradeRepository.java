@@ -5,8 +5,10 @@ import com.ftle.tracker.dto.TradePerformanceRow;
 import com.ftle.tracker.dto.TradeStatsDTO;
 import com.ftle.tracker.entity.Trade;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -14,7 +16,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
-public interface TradeRepository extends JpaRepository<Trade, Long> {
+public interface TradeRepository extends JpaRepository<Trade, Long>, JpaSpecificationExecutor<Trade> {
 
     @Query("select distinct t.symbol from Trade t")
     Set<String> getAllSymbol();
@@ -64,4 +66,8 @@ public interface TradeRepository extends JpaRepository<Trade, Long> {
             @Param("financialYear") String financialYear);
 
     Optional<Trade> findBySymbolAndStatusIgnoreCase(String symbol, String open);
+
+    Page<Trade> findByFinancialYearAndStatus(PageRequest of, String financialYear, String status);
+
+    Page<Trade> findByStatus(PageRequest of, String status);
 }
