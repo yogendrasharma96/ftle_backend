@@ -3,6 +3,7 @@ package com.ftle.tracker.service.impl;
 import com.ftle.tracker.dto.*;
 import com.ftle.tracker.entity.Trade;
 import com.ftle.tracker.entity.TradeImage;
+import com.ftle.tracker.filter.TradeSpecification;
 import com.ftle.tracker.repository.TradeRepository;
 import com.ftle.tracker.service.MarketFeedService;
 import com.ftle.tracker.service.TradeService;
@@ -15,7 +16,9 @@ import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -115,15 +118,16 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
-    public Page<Trade> getTrades(int page, int size, String financialYear) {
+    public Page<Trade> getTrades(int page, int size, String financialYear,String status) {
         Sort sort = Sort.by(
                 Sort.Order.desc("entryTradeDate"),
                 Sort.Order.desc("updatedAt").nullsLast()
         );
-        if (!financialYear.equalsIgnoreCase("ALL")) {
-            return tradeRepository.findByFinancialYear(PageRequest.of(page, size, sort), financialYear);
-        }
-        return tradeRepository.findAll(PageRequest.of(page, size, sort));
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Specification<Trade> spec = TradeSpecification.filterBy(financialYear, status);
+
+        return tradeRepository.findAll(spec, pageable);
     }
 
     @Transactional

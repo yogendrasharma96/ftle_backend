@@ -9,7 +9,7 @@ import org.springframework.data.domain.Page;
 public interface TradeService {
     Trade saveTrade(TradeRequest request);
 
-    Page<Trade> getTrades(int page, int size,String financialYear);
+    Page<Trade> getTrades(int page, int size,String financialYear,String status);
 
     Trade updateTrade(Long id, TradeRequest body);
 

@@ -30,10 +30,11 @@ public class TradeController {
     public Page<Trade> getTrades(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
-            @RequestParam(defaultValue = "ALL") String financialYear
+            @RequestParam(defaultValue = "ALL") String financialYear,
+            @RequestParam(defaultValue = "ALL") String status
 
     ) {
-        return tradeService.getTrades(page, size,financialYear);
+        return tradeService.getTrades(page, size,financialYear,status);
     }
 
     @AdminOnly
