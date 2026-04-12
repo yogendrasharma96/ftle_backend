@@ -14,6 +14,8 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -40,6 +42,7 @@ public class TradeServiceImpl implements TradeService {
 
     @Override
     @Transactional
+    @CacheEvict(value = "trades", allEntries = true)
     public Trade saveTrade(TradeRequest request) {
         log.info("Processing trade for symbol: {} in FY: {}", request.getSymbol(), request.getFinancialYear());
 
@@ -118,6 +121,10 @@ public class TradeServiceImpl implements TradeService {
     }
 
     @Override
+    @Cacheable(
+            value = "trades",
+            key = "#page + '-' + #size + '-' + #financialYear + '-' + #status"
+    )
     public Page<Trade> getTrades(int page, int size, String financialYear,String status) {
         Sort sort = Sort.by(
                 Sort.Order.desc("entryTradeDate"),
@@ -132,6 +139,7 @@ public class TradeServiceImpl implements TradeService {
 
     @Transactional
     @Override
+    @CacheEvict(value = "trades", allEntries = true)
     public Trade updateTrade(Long id, TradeRequest body) {
 
         Trade trade = tradeRepository.findById(id)

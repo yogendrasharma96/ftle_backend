@@ -15,6 +15,8 @@ import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.util.DefaultUriBuilderFactory;
 
+import java.util.List;
+
 @Configuration
 @RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
@@ -69,6 +71,8 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Bean
     public CacheManager cacheManager() {
-        return new ConcurrentMapCacheManager("scripMasterCache");
+        ConcurrentMapCacheManager manager = new ConcurrentMapCacheManager();
+        manager.setCacheNames(List.of("trades", "scripMasterCache"));
+        return manager;
     }
 }
